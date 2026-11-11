@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Biodata Siswa</title>
+  <title>Biodata Siswa & Guru</title>
 
   <!-- Font Google -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -192,7 +192,7 @@
         <h1>Biodata Siswa</h1>
         <p>Cari siswa berdasarkan nama atau NIS.</p>
       </div>
-      <button id="btnBukaModal" class="btn">+ Tambah Siswa</button>
+      <button id="btnBukaModal" class="btn">+ Tambah Data</button>
     </header>
 
     <div class="kontrol">
@@ -209,20 +209,32 @@
   <!-- Modal Form Tambah Data -->
   <div id="modalTambah" class="modal-overlay">
     <div class="modal">
-      <h2>Tambah Data Siswa</h2>
+      <h2>Tambah Data Baru</h2>
       <form id="formTambah">
+        <!-- Pilihan Tipe Data (Siswa / Guru) -->
         <div class="form-grup">
-          <label for="inputNis">NIS *</label>
-          <input type="text" id="inputNis" required pattern="[0-9]+" title="NIS hanya berupa angka">
+          <label for="pilihKategori">Pilih Kategori *</label>
+          <select id="pilihKategori" required>
+            <option value="siswa">Siswa</option>
+            <option value="guru">Guru</option>
+          </select>
         </div>
+
+        <div class="form-grup">
+          <label id="labelNomorInduk" for="inputNomor">NIS *</label>
+          <input type="text" id="inputNomor" required>
+        </div>
+
         <div class="form-grup">
           <label for="inputNama">Nama Lengkap *</label>
           <input type="text" id="inputNama" required>
         </div>
-        <div class="form-grup">
-          <label for="inputKelas">Kelas *</label>
-          <input type="text" id="inputKelas" placeholder="Misal: X IPA 1" required>
+
+        <div class="form-grup" id="grupKelasMapel">
+          <label id="labelKelasMapel" for="inputKelasMapel">Kelas *</label>
+          <input type="text" id="inputKelasMapel" placeholder="Misal: X IPA 1" required>
         </div>
+
         <div class="form-grup">
           <label for="inputJk">Jenis Kelamin</label>
           <select id="inputJk">
@@ -274,14 +286,37 @@
     const elCari = document.getElementById("cari");
     const elKelas = document.getElementById("filterKelas");
 
-    // Elemen Modal
+    // Elemen Modal & Form
     const elModal = document.getElementById("modalTambah");
     const elBtnBukaModal = document.getElementById("btnBukaModal");
     const elBtnTutupModal = document.getElementById("btnTutupModal");
     const elFormTambah = document.getElementById("formTambah");
     const elBtnSimpan = document.getElementById("btnSimpan");
+    
+    // Elemen Dinamis Form
+    const elPilihKategori = document.getElementById("pilihKategori");
+    const elLabelNomorInduk = document.getElementById("labelNomorInduk");
+    const elInputNomor = document.getElementById("inputNomor");
+    const elLabelKelasMapel = document.getElementById("labelKelasMapel");
+    const elInputKelasMapel = document.getElementById("inputKelasMapel");
 
     let semuaSiswa = [];
+
+    // Ubah label form berdasarkan kategori (Siswa / Guru)
+    elPilihKategori.addEventListener("change", (e) => {
+      const kategori = e.target.value;
+      if (kategori === "siswa") {
+        elLabelNomorInduk.textContent = "NIS *";
+        elInputNomor.placeholder = "";
+        elLabelKelasMapel.textContent = "Kelas *";
+        elInputKelasMapel.placeholder = "Misal: X IPA 1";
+      } else {
+        elLabelNomorInduk.textContent = "NIP / ID *";
+        elInputNomor.placeholder = "Misal: 19850101...";
+        elLabelKelasMapel.textContent = "Mata Pelajaran / Jabatan *";
+        elInputKelasMapel.placeholder = "Misal: Matematika / Wali Kelas";
+      }
+    });
 
     // ---------- LANGKAH 3: AMBIL DATA ----------
     async function muatData() {
@@ -326,7 +361,7 @@
       if (hasil.length === 0) {
         tampilkanPesan(
           semuaSiswa.length === 0
-            ? "Belum ada data siswa. Klik 'Tambah Siswa' untuk menambahkan."
+            ? "Belum ada data siswa. Klik '+ Tambah Data' untuk menambahkan."
             : "Tidak ada siswa yang cocok. Coba kata kunci atau kelas lain."
         );
         return;
@@ -371,41 +406,63 @@
     }
 
     // ---------- LANGKAH 5: TAMBAH DATA (INSERT SUPABASE) ----------
-    async function simpanSiswa(e) {
+    async function simpanData(e) {
       e.preventDefault();
 
-      const dataBaru = {
-        nis: document.getElementById("inputNis").value.trim(),
-        nama: document.getElementById("inputNama").value.trim(),
-        kelas: document.getElementById("inputKelas").value.trim(),
-        jenis_kelamin: document.getElementById("inputJk").value || null,
-        tanggal_lahir: document.getElementById("inputTglLahir").value || null,
-        alamat: document.getElementById("inputAlamat").value.trim() || null,
-        foto_url: document.getElementById("inputFotoUrl").value.trim() || null
-      };
+      const kategori = elPilihKategori.value;
+      const nomorInduk = elInputNomor.value.trim();
+      const nama = document.getElementById("inputNama").value.trim();
+      const kelasMapel = elInputKelasMapel.value.trim();
+      const jenisKelamin = document.getElementById("inputJk").value || null;
+      const tanggalLahir = document.getElementById("inputTglLahir").value || null;
+      const alamat = document.getElementById("inputAlamat").value.trim() || null;
+      const fotoUrl = document.getElementById("inputFotoUrl").value.trim() || null;
 
       elBtnSimpan.disabled = true;
       elBtnSimpan.textContent = "Menyimpan...";
 
-      const { data, error } = await db
-        .from("siswa")
-        .insert([dataBaru])
-        .select();
+      let errorSupabase = null;
+
+      if (kategori === "siswa") {
+        const dataSiswa = {
+          nis: nomorInduk,
+          nama: nama,
+          kelas: kelasMapel,
+          jenis_kelamin: jenisKelamin,
+          tanggal_lahir: tanggalLahir,
+          alamat: alamat,
+          foto_url: fotoUrl
+        };
+        const { error } = await db.from("siswa").insert([dataSiswa]);
+        errorSupabase = error;
+      } else {
+        const dataGuru = {
+          nip: nomorInduk,
+          nama: nama,
+          mapel: kelasMapel,
+          jenis_kelamin: jenisKelamin,
+          tanggal_lahir: tanggalLahir,
+          alamat: alamat,
+          foto_url: fotoUrl
+        };
+        const { error } = await db.from("guru").insert([dataGuru]);
+        errorSupabase = error;
+      }
 
       elBtnSimpan.disabled = false;
       elBtnSimpan.textContent = "Simpan Data";
 
-      if (error) {
-        console.error(error);
-        alert("Gagal menyimpan data: " + error.message);
+      if (errorSupabase) {
+        console.error(errorSupabase);
+        alert("Gagal menyimpan data: " + errorSupabase.message);
         return;
       }
 
-      // Bersihkan formulir dan tutup modal
       elFormTambah.reset();
+      elPilihKategori.value = "siswa"; // Reset ke default
+      elPilihKategori.dispatchEvent(new Event('change')); // Trigger event text label
       tutupModal();
 
-      // Muat ulang seluruh data agar tampilan diperbarui
       await muatData();
     }
 
@@ -453,7 +510,7 @@
 
     function isiPilihanKelas() {
       const opsiLama = elKelas.querySelector('option[value=""]');
-      elKelas.replaceChildren(opsiLama); // Sisakan hanya opsi "Semua kelas"
+      elKelas.replaceChildren(opsiLama);
       
       const daftarKelas = [...new Set(semuaSiswa.map((s) => s.kelas).filter(Boolean))].sort();
       daftarKelas.forEach((k) => {
@@ -468,9 +525,8 @@
     elKelas.addEventListener("change", tampilkanSiswa);
     elBtnBukaModal.addEventListener("click", bukaModal);
     elBtnTutupModal.addEventListener("click", tutupModal);
-    elFormTambah.addEventListener("submit", simpanSiswa);
+    elFormTambah.addEventListener("submit", simpanData);
 
-    // Tutup modal jika klik di luar box modal
     elModal.addEventListener("click", (e) => {
       if (e.target === elModal) tutupModal();
     });
