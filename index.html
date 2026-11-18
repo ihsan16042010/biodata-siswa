@@ -301,6 +301,7 @@
     const elInputKelasMapel = document.getElementById("inputKelasMapel");
 
     let semuaSiswa = [];
+    let semuaGuru = [];
 
     // Ubah label form berdasarkan kategori (Siswa / Guru)
     elPilihKategori.addEventListener("change", (e) => {
@@ -324,6 +325,12 @@
 
       const { data, error } = await db
         .from("siswa")
+         const resGuru = await db
+        .from("guru")
+        .select("nip, nama, mata_pelajaran, jenis_kelamin, tanggal_lahir, alamat, foto_url")
+        .order("nama");
+      
+      semuaGuru = resGuru.data || [];
         .select("nis, nama, kelas, jenis_kelamin, tanggal_lahir, alamat, foto_url")
         .order("nama");
 
@@ -341,28 +348,32 @@
       tampilkanSiswa();
     }
 
-    // ---------- LANGKAH 4: TAMPILKAN KARTU ----------
+      // ---------- LANGKAH 4: TAMPILKAN KARTU ----------
     function tampilkanSiswa() {
       const kataKunci = elCari.value.trim().toLowerCase();
       const kelasDipilih = elKelas.value;
+      const semuaData = [...semuaSiswa, ...semuaGuru];
 
-      const hasil = semuaSiswa.filter((s) => {
-        const cocokKelas = !kelasDipilih || s.kelas === kelasDipilih;
+      const hasil = semuaData.filter((s) => {
+        const grup = s.kelas || s.mata_pelajaran;
+        const nomor = String(s.nis || s.nip || "").toLowerCase();
+
+        const cocokKelas = !kelasDipilih || grup === kelasDipilih;
         const cocokCari =
           !kataKunci ||
           s.nama.toLowerCase().includes(kataKunci) ||
-          s.nis.toLowerCase().includes(kataKunci);
+          nomor.includes(kataKunci);
         return cocokKelas && cocokCari;
       });
 
-      elJumlah.textContent = hasil.length + " dari " + semuaSiswa.length + " siswa";
+      elJumlah.textContent = hasil.length + " dari " + semuaData.length + " data";
       elDaftar.replaceChildren();
 
       if (hasil.length === 0) {
         tampilkanPesan(
-          semuaSiswa.length === 0
-            ? "Belum ada data siswa. Klik '+ Tambah Data' untuk menambahkan."
-            : "Tidak ada siswa yang cocok. Coba kata kunci atau kelas lain."
+          semuaData.length === 0
+            ? "Belum ada data. Klik '+ Tambah Data' untuk menambahkan."
+            : "Tidak ada data yang cocok. Coba kata kunci atau filter lain."
         );
         return;
       }
@@ -371,8 +382,12 @@
     }
 
     function buatKartu(s) {
+      const isGuru = !!s.nip;
+      const grup = isGuru ? s.mata_pelajaran : s.kelas;
+      const nomor = isGuru ? s.nip : s.nis;
+
       const kartu = el("article", "kartu");
-      kartu.style.setProperty("--hue", warnaKelas(s.kelas));
+      kartu.style.setProperty("--hue", warnaKelas(grup));
 
       kartu.appendChild(el("div", "pita"));
 
@@ -392,10 +407,10 @@
       isi.appendChild(foto);
 
       isi.appendChild(el("h2", "nama", s.nama));
-      isi.appendChild(el("p", "nis", "NIS " + s.nis));
+      isi.appendChild(el("p", "nis", (isGuru ? "NIP " : "NIS ") + nomor));
 
       const rincian = el("dl", "rincian");
-      tambahBaris(rincian, "Kelas", s.kelas);
+      tambahBaris(rincian, isGuru ? "Mata Pelajaran" : "Kelas", grup);
       if (TAMPILKAN.jenisKelamin) tambahBaris(rincian, "Jenis kelamin", s.jenis_kelamin);
       if (TAMPILKAN.tanggalLahir) tambahBaris(rincian, "Tanggal lahir", formatTanggal(s.tanggal_lahir));
       if (TAMPILKAN.alamat) tambahBaris(rincian, "Alamat", s.alamat);
@@ -439,7 +454,7 @@
         const dataGuru = {
           nip: nomorInduk,
           nama: nama,
-          mapel: kelasMapel,
+          mata_pelajaran: kelasMapel,
           jenis_kelamin: jenisKelamin,
           tanggal_lahir: tanggalLahir,
           alamat: alamat,
